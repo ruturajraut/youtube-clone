@@ -4,7 +4,6 @@
   "description": "Youtube clone app using NodeJs",
   "main": "index.js",
   "type": "module",
-  
   "scripts": {
     "dev": "nodemon src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,6 +12,6 @@
   "license": "ISC",
   "devDependencies": {
     "nodemon": "^3.0.0",
-    "prettier": "^3.0.0"
+    "prettier": "^3.6.2"
   }
 }
