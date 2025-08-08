@@ -224,7 +224,98 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-const getUserChannelProfile = asyncHandler(async (req, res) => {  
+const changeCurrentPassword = asyncHandler(async(req, res) => {
+    const {oldPassword, newPassword} = req.body
+
+    if (!oldPassword || !newPassword) {
+        throw new ApiError(400, "Old password and new password are required")
+    }
+
+    const user = await User.findById(req.user?._id)
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if (!isPasswordCorrect) {
+        throw new ApiError(400, "Invalid old password")
+    }
+
+    user.password = newPassword
+    await user.save({validateBeforeSave: false})
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"))
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+  // Get the current user from the request object
+  const user = req.user;
+  if (!user) {
+    throw new ApiError(401, 'User not found');
+  }
+  return res.status(200).json(new ApiResponse(200, user, 'Current user fetched successfully'));
+});
+
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+  const { fullname, email, username } = req.body; 
+  if (!fullname || !email || !username) {
+    throw new ApiError(400, 'Fullname, email, and username are required');  
+  }
+  // Check if the username or email is already taken by another user
+  const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+  if (existingUser && existingUser._id.toString() !== req.user._id.toString()) {
+    throw new ApiError(409, 'Username or email already exists');  
+  }
+
+  // Update user details
+  existingUser.fullname = fullname;
+  existingUser.email = email;
+  existingUser.username = username;
+  await existingUser.save();
+
+  return res.status(200).json(new ApiResponse(200, existingUser, 'Account details updated successfully'));
+});
+
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  const user = req.user;  
+  if (!user) {
+    throw new ApiError(401, 'User not found');  
+  }
+  if (!req.file) {
+    throw new ApiError(400, 'Avatar file is required');
+  }
+  // Upload the new avatar to Cloudinary
+  const avatar = await uploadOnCloudinary(req.file.path);
+  if (!avatar) {
+    throw new ApiError(500, 'Failed to upload avatar');
+  }
+  // Update the user's avatar URL in the database
+  user.avatar = avatar.url; // Assuming the uploadOnCloudinary function returns an object with a url property
+  await user.save({ validateBeforeSave: false }); // Skip validation for avatar field 
+  return res.status(200).json(new ApiResponse(200, user, 'Avatar updated successfully'));
+});
+
+const updateUserCoverImage = asyncHandler(async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    throw new ApiError(401, 'User not found');
+  }
+  if (!req.file) {
+    throw new ApiError(400, 'Cover image file is required');
+  }
+  // Upload the new cover image to Cloudinary
+  const coverImage = await uploadOnCloudinary(req.file.path);
+  if (!coverImage) {
+    throw new ApiError(500, 'Failed to upload cover image');
+  }
+  // Update the user's cover image URL in the database
+  user.coverImage = coverImage.url; // Assuming the uploadOnCloudinary function returns an object with a url property
+  await user.save({ validateBeforeSave: false }); // Skip validation for coverImage field
+  return res.status(200).json(new ApiResponse(200, user, 'Cover image updated successfully'));
+});
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
   // get user details from request params
   const { username } = req.params;
 
@@ -322,4 +413,4 @@ const getWatchHistory = asyncHandler(async(req, res) => {
 
 
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken, getUserChannelProfile, getWatchHistory };
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateUserAvatar, updateUserCoverImage, updateAccountDetails, getUserChannelProfile, getWatchHistory };
