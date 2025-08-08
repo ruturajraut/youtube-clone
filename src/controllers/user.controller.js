@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js"; // Fixed import path
 import { User } from "../models/user.models.js"; // Assuming you have a User model defined
 import { uploadOnCloudinary } from "../utils/cloudinary.js"; // Assuming you have a cloudinary utility for file uploads
 import { ApiResponse } from "../utils/ApiResponse.js";
+import mongoose, { get } from "mongoose";
 
 
 
@@ -223,4 +224,102 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const getUserChannelProfile = asyncHandler(async (req, res) => {  
+  // get user details from request params
+  const { username } = req.params;
+
+  if (!username?.trim) {
+    throw new ApiError(400, 'Username is required');
+  }
+
+  // find the user by username
+  // Use aggregate to get the channel profile with subscriber count and channels subscribed to count
+  const channel = await User.aggregate([
+    { $match: { username: username.toLowerCase() } },  //user matching
+    { $lookup: { from: 'subscriptions', localField: '_id', foreignField: 'channel', as: 'subscribers' } },  //get subscribers
+    { $lookup: { from: 'subscriptions', localField: '_id', foreignField: 'subscriber', as: 'subscribeTo' } },  //get channels subscribed to
+    { $addFields: {
+      subscriberCount: { $size: '$subscribers' },  //subscribers count
+      channelsSubscribedToCount: { $size: '$subscribeTo' },  //channels subscribed to count
+      // isSubscribed: {
+      //   $cond: [ { $gt: [ { $size: '$subscribeTo' }, 0 ] }, true, false ] // check if user is subscribed to the channel
+      // }
+      isSubscribed: {
+        $cond: {
+          if: { $in: [req.user?._id, '$subscribers.subscriber'] }, // check if the user is in the subscribers list
+          then: true,
+          else: false
+
+        }
+      }
+    }},
+    { $project: { 
+      fullname: 1,
+      username: 1,
+      email: 1,
+      subscriberCount: 1,
+      channelsSubscribedToCount: 1,
+      isSubscribed: 1,
+      avatar: 1,  
+      coverImage: 1,
+      createdAt: 1,
+
+     } }  // Project the fields you want to return
+
+  ]);
+
+  if (!channel) {
+    throw new ApiError(404, 'Channel not found');
+  }
+  if (channel.length === 0) {
+    throw new ApiError(404, 'Channel not found');
+  }
+
+
+  return res.status(200).json(
+    new ApiResponse(200, channel[0], 'User channel profile fetched successfully')
+  );
+});
+
+
+
+const getWatchHistory = asyncHandler(async(req, res) => {
+  const user = await User.aggregate([
+    { $match: { _id: new mongoose.Types.ObjectId(req.user._id) } }, // Match the user by ID
+    { 
+      $lookup: { 
+        from: 'videos', // Join with the Video collection
+        localField: 'watchHistory', // Local field in User
+        foreignField: '_id', // Foreign field in Video
+        as: 'watchHistoryVideos', // Output array field
+        pipeline: [
+          {
+            $lookup: {
+              from: 'users', // Join with the User collection for video owner details
+              localField: 'owner',
+              foreignField: '_id',
+              as: 'owner', // Output array field for owner details
+              pipeline: [
+                { $project: { fullname: 1, username: 1, avatar: 1 } } // Project only necessary fields from the owner 
+              ]
+            }
+          },
+          {
+            $addFields: {
+              owner: { $first: '$owner' } // Get the first owner object from the array
+            } 
+          }
+          
+        ]
+      }
+    }
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(200, user[0]?.watchHistoryVideos || [], 'User watch history fetched successfully')
+  );
+})
+
+
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken, getUserChannelProfile, getWatchHistory };
