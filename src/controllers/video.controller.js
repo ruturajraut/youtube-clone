@@ -1,6 +1,6 @@
 import mongoose, {isValidObjectId} from "mongoose"
-import {Video} from "../models/video.model.js"
-import {User} from "../models/user.model.js"
+import {Video} from "../models/video.models.js"
+import {User} from "../models/user.models.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
@@ -47,6 +47,31 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
 
 })
+
+
+const createVideo = asyncHandler(async (req, res) => {
+  const { title, description, videoFile, thumbnail } = req.body;
+
+  // Validate required fields
+  if (!title || !description || !videoFile || !thumbnail) {
+    throw new ApiError(400, "Title, description, video file, and thumbnail are required");
+  }
+
+  // Create new video in database
+  const video = await Video.create({
+    title,
+    description,
+    videoFile,
+    thumbnail,
+    owner: req.user._id // assuming you have user info in the request (e.g., via auth middleware)
+  });
+
+  // Send success response
+  return res.status(201).json(
+    new ApiResponse(201, video, "Video uploaded successfully")
+  );
+});
+
 
 const publishAVideo = asyncHandler(async (req, res) => {
     const { title, description} = req.body
@@ -134,7 +159,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, "Video deleted successfully"));
 });
 
-const togglePublishStatus = asyncHandler(async (req, res) => {
+const toggleVideoPublishStatus = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     if (!isValidObjectId(videoId)) {
         throw new ApiError(400, "Invalid video ID");
@@ -154,4 +179,4 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
 
 
 
-export { getAllVideos, publishAVideo, getVideoById, updateVideo, deleteVideo, togglePublishStatus };
+export { getAllVideos, publishAVideo, getVideoById, createVideo, updateVideo, deleteVideo, toggleVideoPublishStatus };
